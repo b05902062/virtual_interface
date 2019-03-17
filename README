@@ -1,0 +1,10 @@
+By wang zih_min in march 2019
+
+This is a dhcp denial of service program.
+It can take down the entire network the dhcp server serves.
+
+Running this program to take down a public network is illegal and will be traceble.
+You also may be charged with infraction of law.
+
+It is intended to run on a little endian machine.
+It is developed on Linux ubuntu 4.15.0-36-generic #39~16.04.1-Ubuntu SMP Tue Sep 25 08:59:23 UTC 2018 x86_64 x86_64 x86_64 GNU/Linux.
