@@ -13,10 +13,30 @@ by wang zih_min
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <linux/ip.h>
+#include <arpa/inet.h>
+#include <linux/udp.h>
+
 
 #define ARPHRD_ETHER 	1
 #define PACKETMAXSIZE	512
+
+
+struct pseudo_udp_hdr{
+
+	unsigned int source;
+	unsigned int dest;
+	unsigned char pad;
+	unsigned char proto;
+	unsigned short length;
+	struct udphdr udp_hdr;
+	unsigned char data[PACKETMAXSIZE-sizeof(struct ethhdr)-sizeof(struct iphdr)-sizeof(struct udphdr)];
+};
+
+
+
 unsigned short checksum(void* addr,int count);
+void copy_macaddr(unsigned char *sll_addr,unsigned char first,unsigned char second,unsigned char third,unsigned char fourth,unsigned char fifth,unsigned char sixth);
 
 
 
@@ -38,19 +58,41 @@ int main(int argc,char **argv){
 	memset(&itface,0,sizeof(struct ifreq));
 	
 	strncpy(itface.ifr_name,argv[1],IFNAMSIZ);
-
+	printf("%s\n",itface.ifr_name);
+	
 	//get hwaddr of the interface
-	if(ioctl(sd, SIOCGIFHWADDR, &itface) < 0){
-		perror("ioctl(SIOCGIFHADDR)");	
+	if(ioctl(sd,SIOCGIFHWADDR, &itface) > 0){
+		perror("ioctl(SIOCGIFHWADDR)");	
 		exit(-1);
 	}
-
 	//check whether it is ethernet interface
 	if(itface.ifr_hwaddr.sa_family!=ARPHRD_ETHER){
 		fprintf(stderr,"interface provided is not a ethernet interface\n");
 		exit(-1);
 
 	}
+#ifdef debugmacaddr
+	printf("mac_addr");
+	for(int iii=0;iii<6;iii++){
+		printf(":%02x",(unsigned char)(itface.ifr_hwaddr.sa_data[iii]));
+
+	}
+	printf("\n");
+#endif
+	//modify mac address
+	copy_macaddr(itface.ifr_hwaddr.sa_data,0,(unsigned char)0xe0,(unsigned char)0x4c,(unsigned char)0x68,(unsigned char)0x03,(unsigned char)0x73);
+	if(ioctl(sd, SIOCSIFHWADDR, &itface) < 0){
+		perror("ioctl(SIOCSIFHWADDR)");	
+		exit(-1);
+	}
+#ifdef debugmacaddr
+	printf("mac_addr");
+	for(int iii=0;iii<8;iii++){
+		printf(":%02x",(unsigned char)itface.ifr_hwaddr.sa_data[iii]);
+
+	}
+	printf("\n");
+#endif
 	//get interface index
 	if(ioctl(sd, SIOCGIFINDEX, &itface) < 0){
 		perror("ioctl(SIOCGIFINDEX)");
@@ -61,64 +103,121 @@ int main(int argc,char **argv){
 	struct sockaddr_ll ifaddr;
 	ifaddr.sll_family=AF_PACKET;
 	ifaddr.sll_ifindex=itface.ifr_ifindex;
-	ifaddr.sll_protocal=htons(ETH_P_IP);
+	ifaddr.sll_protocol=htons(ETH_P_IP);
 	if(bind(sd,(struct sockaddr*)&ifaddr,sizeof(struct sockaddr_ll))<0){
 		perror("bind()");
 		exit(-1);
 	}
-
 	
-#ifdef debugmacaddr
-	printf("mac_addr");
-	for(int iii=0;iii<8;iii++){
-		printf(":%02x",(unsigned char)itface.ifr_hwaddr.sa_data[iii]);
+///////////////////////////////start to construct datagram
+	unsigned char packet[PACKETMAXSIZE];
+	memset(packet,0,PACKETMAXSIZE);
+	struct ethhdr *ether=(struct ethhdr*)packet;
+	struct iphdr *ip=(struct iphdr*)(packet+sizeof(struct ethhdr));
+	int packet_len=PACKETMAXSIZE;//sizeof(struct ethhdr)+64;
+	
+	//ethernet frame header
+	copy_macaddr(ether->h_dest,15,14,13,12,11,10);
+	copy_macaddr(ether->h_source,0,(unsigned char)0xe0,(unsigned char)0x4c,(unsigned char)0x68,(unsigned char)0x03,(unsigned char)0x73);
+	ether->h_proto=htons(ETH_P_IP);
 
-	}
-	printf("\n");
-#endif
-	//modify mac address
-	for(int iii=0;iii<8;iii++){
-		itface.ifr_hwaddr.sa_data[iii]=iii;
+	//ip header
+	ip->ihl = 5;
+	ip->version = 4;
+	ip->tos = 0;
+	ip->tot_len = htons(PACKETMAXSIZE-sizeof(struct ethhdr));
+	ip->frag_off = 0;
+	ip->id = htons(54321);
+	ip->ttl = 64;
+	ip->protocol = (unsigned char)IPPROTO_UDP; //17
+	inet_pton(AF_INET,"10.129.234.200",&(ip->saddr));
+	inet_pton(AF_INET,"10.129.234.201",&(ip->daddr));
+	ip->check=checksum(ip,20);
 
-	}
-	if(ioctl(sd, SIOCSIFHWADDR, &itface) < 0){
-		perror("ioctl(SIOCGIFHADDR)");	
+
+	////////////////////Create a pseudo udp header for udp checksum.
+	struct pseudo_udp_hdr p_udp;
+	memset(&p_udp,0,sizeof(struct pseudo_udp_hdr));	
+
+	inet_pton(AF_INET,"10.129.234.200",&(p_udp.source));
+	inet_pton(AF_INET,"10.129.234.201",&(p_udp.dest));
+	p_udp.pad=0;
+	p_udp.proto=IPPROTO_UDP;
+	p_udp.length=htons(44);
+	p_udp.udp_hdr.source=htons(67);
+	p_udp.udp_hdr.dest=htons(68);
+	p_udp.udp_hdr.len=htons(PACKETMAXSIZE-sizeof(struct ethhdr)-sizeof(struct iphdr));
+	p_udp.udp_hdr.check=0;
+	
+
+
+
+///////////////////////////////////////Construct dhcp packet
+	
+
+
+
+
+
+
+	p_udp.udp_hdr.check=checksum(&p_udp,sizeof(struct pseudo_udp_hdr));
+
+/////////////////////////////////////Copy pseudo udp header to real udp header.
+
+	//Real udp header
+	struct udphdr *udp=(struct udphdr*)(packet+sizeof(struct iphdr)+sizeof(struct ethhdr));
+	memcpy(udp,&(p_udp.udp_hdr),PACKETMAXSIZE-sizeof(struct ethhdr)-sizeof(struct iphdr));
+
+///////////////////////////////////Ready to send packet.
+///////////////////////////////////Specify MAC address of the destination dhcp server.
+
+	struct sockaddr_ll destifaddr;
+	destifaddr.sll_halen=ETH_ALEN;
+	destifaddr.sll_ifindex=itface.ifr_ifindex;
+	copy_macaddr((unsigned char*)destifaddr.sll_addr,15,14,13,12,11,10);
+	if(sendto(sd,packet,packet_len,0,(struct sockaddr*)&destifaddr,sizeof(struct sockaddr_ll))<0){
+		perror("sendto()");
 		exit(-1);
 	}
-#ifdef debugmacaddr
-	printf("mac_addr");
-	for(int iii=0;iii<8;iii++){
-		printf(":%02x",(unsigned char)itface.ifr_hwaddr.sa_data[iii]);
 
+
+
+	return 0;
+
+}
+void copy_macaddr(unsigned char *sll_addr,unsigned char first,unsigned char second,unsigned char third,unsigned char fourth,unsigned char fifth,unsigned char sixth){
+
+	if(first>=0&&first<=255) sll_addr[0]=first;
+	else{
+		fprintf(stderr,"mac address error\n");
+		exit(-1);
 	}
-	printf("\n");
-#endif
-	unsigned char packet[PACKETMAXSIE];
-	struct ether_header *etherhdr=(struct ether_header*)packet;
-	
-
-/*
-	ip->iph_ihl = 5;
-	ip->iph_ver = 4;
-	ip->iph_tos = 0; // Low delay
-	ip->iph_len = 64;
-	ip->iph_ident = 54321;
-	ip->iph_ttl = 64; // hops
-	ip->iph_protocol = (unsigned char)1; // UDP
-	// Source IP address, can use spoofed address here!!!
-	inet_pton(AF_INET,"10.129.234.200",&(ip->iph_sourceip));
-	// The destination IP address
-	ip->iph_destip = (sinp->sin_addr).s_addr;
-	ip->iph_chksum=checksum(ip,20);
-
-*/
-
-	if(sendto(sd,
-
-
-
-
-
+	if(second>=0&&second<=255) sll_addr[1]=second;
+	else{
+		fprintf(stderr,"mac address error\n");
+		exit(-1);
+	}
+	if(third>=0&&third<=255) sll_addr[2]=third;
+	else{
+		fprintf(stderr,"mac address error\n");
+		exit(-1);
+	}
+	if(fourth>=0&&fourth<=255) sll_addr[3]=fourth;
+	else{
+		fprintf(stderr,"mac address error\n");
+		exit(-1);
+	}
+	if(fifth>=0&&fifth<=255) sll_addr[4]=fifth;
+	else{
+		fprintf(stderr,"mac address error\n");
+		exit(-1);
+	}
+	if(sixth>=0&&sixth<=255) sll_addr[5]=sixth;
+	else{
+		fprintf(stderr,"mac address error\n");
+		exit(-1);
+	}
+	return;
 }
 
 unsigned short checksum(void* addr,int count){
