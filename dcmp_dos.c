@@ -6,39 +6,12 @@ by wang zih_min
 */
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
 #include <sys/socket.h>
 #include <linux/if_packet.h>
-#include <net/ethernet.h> /* the L2 protocols */
 #include <sys/ioctl.h>
-#include <net/if.h>
-#include <netinet/in.h>
-#include <linux/ip.h>
-#include <arpa/inet.h>
-#include <linux/udp.h>
-
+#include "construct_packet.h"
 
 #define ARPHRD_ETHER 	1
-#define PACKETMAXSIZE	512
-
-
-struct pseudo_udp_hdr{
-
-	unsigned int source;
-	unsigned int dest;
-	unsigned char pad;
-	unsigned char proto;
-	unsigned short length;
-	struct udphdr udp_hdr;
-	unsigned char data[PACKETMAXSIZE-sizeof(struct ethhdr)-sizeof(struct iphdr)-sizeof(struct udphdr)];
-};
-
-
-
-unsigned short checksum(void* addr,int count);
-void copy_macaddr(unsigned char *sll_addr,unsigned char first,unsigned char second,unsigned char third,unsigned char fourth,unsigned char fifth,unsigned char sixth);
-
-
 
 int main(int argc,char **argv){
 
@@ -47,20 +20,20 @@ int main(int argc,char **argv){
 		exit(-1);
 	}
 
+	//Get a layer 2 socket with raw format. Raw means we want to construct the header of layer 2 packet on our own.
 	int sd;
 	if((sd=socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP)))<0){
 		perror("socket()");
 		exit(-1);
 	}
 	
-////////////////////////Modify the mac address of the interface provided.
+	//get hwaddr of the interface
 	struct ifreq itface;
 	memset(&itface,0,sizeof(struct ifreq));
 	
 	strncpy(itface.ifr_name,argv[1],IFNAMSIZ);
-	printf("%s\n",itface.ifr_name);
+	//printf("%s\n",itface.ifr_name);
 	
-	//get hwaddr of the interface
 	if(ioctl(sd,SIOCGIFHWADDR, &itface) > 0){
 		perror("ioctl(SIOCGIFHWADDR)");	
 		exit(-1);
@@ -71,6 +44,8 @@ int main(int argc,char **argv){
 		exit(-1);
 
 	}
+
+
 #ifdef debugmacaddr
 	printf("mac_addr");
 	for(int iii=0;iii<6;iii++){
@@ -79,12 +54,18 @@ int main(int argc,char **argv){
 	}
 	printf("\n");
 #endif
-	//modify mac address
-	copy_macaddr(itface.ifr_hwaddr.sa_data,0,(unsigned char)0xe0,(unsigned char)0x4c,(unsigned char)0x68,(unsigned char)0x03,(unsigned char)0x73);
+	
+
+	//modify the mac address
+	unsigned char hwmac[6]={0x00,0xe0,0x4c,0x68,0x03,0x73};
+	unsigned char dstmac[6]={0x00,0x11,0x4c,0x68,0x03,0x73};
+	copy_macaddr(itface.ifr_hwaddr.sa_data,hwmac[0],hwmac[1],hwmac[2],hwmac[3],hwmac[4],hwmac[5]);
 	if(ioctl(sd, SIOCSIFHWADDR, &itface) < 0){
 		perror("ioctl(SIOCSIFHWADDR)");	
 		exit(-1);
 	}
+
+
 #ifdef debugmacaddr
 	printf("mac_addr");
 	for(int iii=0;iii<8;iii++){
@@ -93,6 +74,8 @@ int main(int argc,char **argv){
 	}
 	printf("\n");
 #endif
+
+
 	//get interface index
 	if(ioctl(sd, SIOCGIFINDEX, &itface) < 0){
 		perror("ioctl(SIOCGIFINDEX)");
@@ -100,6 +83,7 @@ int main(int argc,char **argv){
 
 	}
 	
+	//Bind our file descriptor to this interface.
 	struct sockaddr_ll ifaddr;
 	ifaddr.sll_family=AF_PACKET;
 	ifaddr.sll_ifindex=itface.ifr_ifindex;
@@ -109,73 +93,29 @@ int main(int argc,char **argv){
 		exit(-1);
 	}
 	
-///////////////////////////////start to construct datagram
+	//start to construct dhcp datagram
 	unsigned char packet[PACKETMAXSIZE];
-	memset(packet,0,PACKETMAXSIZE);
-	struct ethhdr *ether=(struct ethhdr*)packet;
-	struct iphdr *ip=(struct iphdr*)(packet+sizeof(struct ethhdr));
-	int packet_len=PACKETMAXSIZE;//sizeof(struct ethhdr)+64;
+	unsigned int hip=0;
+	unsigned int dip;
+	inet_pton(AF_INET,"255.255.255.255",&dip);
 	
-	//ethernet frame header
-	copy_macaddr(ether->h_dest,15,14,13,12,11,10);
-	copy_macaddr(ether->h_source,0,(unsigned char)0xe0,(unsigned char)0x4c,(unsigned char)0x68,(unsigned char)0x03,(unsigned char)0x73);
-	ether->h_proto=htons(ETH_P_IP);
+	//Host ip address will be returned in hip.
+	construct_udp(67/*dhcp*/,hwmac,dstmac,&hip,&dip,packet);
 
-	//ip header
-	ip->ihl = 5;
-	ip->version = 4;
-	ip->tos = 0;
-	ip->tot_len = htons(PACKETMAXSIZE-sizeof(struct ethhdr));
-	ip->frag_off = 0;
-	ip->id = htons(54321);
-	ip->ttl = 64;
-	ip->protocol = (unsigned char)IPPROTO_UDP; //17
-	inet_pton(AF_INET,"10.129.234.200",&(ip->saddr));
-	inet_pton(AF_INET,"10.129.234.201",&(ip->daddr));
-	ip->check=checksum(ip,20);
+		
 
 
-	////////////////////Create a pseudo udp header for udp checksum.
-	struct pseudo_udp_hdr p_udp;
-	memset(&p_udp,0,sizeof(struct pseudo_udp_hdr));	
-
-	inet_pton(AF_INET,"10.129.234.200",&(p_udp.source));
-	inet_pton(AF_INET,"10.129.234.201",&(p_udp.dest));
-	p_udp.pad=0;
-	p_udp.proto=IPPROTO_UDP;
-	p_udp.length=htons(44);
-	p_udp.udp_hdr.source=htons(67);
-	p_udp.udp_hdr.dest=htons(68);
-	p_udp.udp_hdr.len=htons(PACKETMAXSIZE-sizeof(struct ethhdr)-sizeof(struct iphdr));
-	p_udp.udp_hdr.check=0;
-	
-
-
-
-///////////////////////////////////////Construct dhcp packet
-	
-
-
-
-
-
-
-	p_udp.udp_hdr.check=checksum(&p_udp,sizeof(struct pseudo_udp_hdr));
-
-/////////////////////////////////////Copy pseudo udp header to real udp header.
-
-	//Real udp header
-	struct udphdr *udp=(struct udphdr*)(packet+sizeof(struct iphdr)+sizeof(struct ethhdr));
-	memcpy(udp,&(p_udp.udp_hdr),PACKETMAXSIZE-sizeof(struct ethhdr)-sizeof(struct iphdr));
-
-///////////////////////////////////Ready to send packet.
-///////////////////////////////////Specify MAC address of the destination dhcp server.
+	//Ready to send packet.
+	//Specify the interface through which we sent our packet.
 
 	struct sockaddr_ll destifaddr;
+	memset(&destifaddr,0,sizeof(struct sockaddr_ll));
 	destifaddr.sll_halen=ETH_ALEN;
 	destifaddr.sll_ifindex=itface.ifr_ifindex;
-	copy_macaddr((unsigned char*)destifaddr.sll_addr,15,14,13,12,11,10);
-	if(sendto(sd,packet,packet_len,0,(struct sockaddr*)&destifaddr,sizeof(struct sockaddr_ll))<0){
+	//It seems unnecessary to specify the mac address of destination, for we have write it in the packet we created.
+	//copy_macaddr((unsigned char*)destifaddr.sll_addr,0x11,dstmac[1],dstmac[2],dstmac[3],dstmac[4],dstmac[5]);
+	
+	if(sendto(sd,packet,PACKETMAXSIZE,0,(struct sockaddr*)&destifaddr,sizeof(struct sockaddr_ll))<0){
 		perror("sendto()");
 		exit(-1);
 	}
@@ -185,63 +125,3 @@ int main(int argc,char **argv){
 	return 0;
 
 }
-void copy_macaddr(unsigned char *sll_addr,unsigned char first,unsigned char second,unsigned char third,unsigned char fourth,unsigned char fifth,unsigned char sixth){
-
-	if(first>=0&&first<=255) sll_addr[0]=first;
-	else{
-		fprintf(stderr,"mac address error\n");
-		exit(-1);
-	}
-	if(second>=0&&second<=255) sll_addr[1]=second;
-	else{
-		fprintf(stderr,"mac address error\n");
-		exit(-1);
-	}
-	if(third>=0&&third<=255) sll_addr[2]=third;
-	else{
-		fprintf(stderr,"mac address error\n");
-		exit(-1);
-	}
-	if(fourth>=0&&fourth<=255) sll_addr[3]=fourth;
-	else{
-		fprintf(stderr,"mac address error\n");
-		exit(-1);
-	}
-	if(fifth>=0&&fifth<=255) sll_addr[4]=fifth;
-	else{
-		fprintf(stderr,"mac address error\n");
-		exit(-1);
-	}
-	if(sixth>=0&&sixth<=255) sll_addr[5]=sixth;
-	else{
-		fprintf(stderr,"mac address error\n");
-		exit(-1);
-	}
-	return;
-}
-
-unsigned short checksum(void* addr,int count){
-           /* Compute Internet Checksum for "count" bytes
-            *         beginning at location "addr".
-            */
-       register long sum = 0;
-
-        while( count > 1 )  {
-           /*  This is the inner loop */
-               sum += * (unsigned short*) addr;
-			   addr+=2;
-               count -= 2;
-       }
-
-           /*  Add left-over byte, if any */
-       if( count > 0 )
-               sum += * (unsigned char *) addr;
-
-           /*  Fold 32-bit sum to 16 bits */
-       while (sum>>16)
-           sum = (sum & 0xffff) + (sum >> 16);
-
-       return (unsigned short)~sum;
-	  
-}
-
