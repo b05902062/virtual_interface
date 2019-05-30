@@ -67,6 +67,16 @@ int main(int argc,char **argv){
 	unsigned char hwmac[6]={0x00,0x0c,0x29,0x10,0xd9,0x2f};
 	unsigned int xid = 12346;
 	
+	int last = 5;
+	for(int i = 0; i < atoi(argv[2]) ; i++)
+	{
+		while(hwmac[last] == 0xff)
+		{
+			last -= 1;
+		}
+
+		hwmac[last] += 0x01;
+	}
 	
 
 	int sd;
