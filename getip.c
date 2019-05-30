@@ -46,7 +46,7 @@ void process_msg(unsigned char *packet_in, int recv_msg_len, Packet *p);
 int main(int argc,char **argv){
 
 	if(argc!=4){
-		fprintf(stderr,"usage: <dhcp_dos> <name of a connected interface> <hwmac> <xid>\n");
+		fprintf(stderr,"usage: <dhcp_dos> <name of a connected interface> <i (hwmac + i)> <xid>\n");
 		exit(-1);
 	}
 
