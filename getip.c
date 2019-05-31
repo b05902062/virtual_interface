@@ -64,7 +64,7 @@ int main(int argc,char **argv){
 	// unsigned int xid = argv[3];
 
 
-	unsigned char hwmac[6]={0x00,0x0c,0x29,0x10,0xd9,0x2f};
+	unsigned char hwmac[6]={0xf4,0x5c,0x89,0xc0,0x7a,0x77};
 	unsigned int xid = 12346;
 	
 	int last = 5;

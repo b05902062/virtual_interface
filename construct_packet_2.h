@@ -17,7 +17,7 @@
 #define DHCP_OFFER 2
 #define DHCP_REQUEST 3
 #define DHCP_ACK 5
-
+#define DHCP_BROADCAST_FLAT 128
 struct dhcp_header {		/* BOOTP packet format */
 	unsigned char op;			/* 1=request, 2=reply */
 	unsigned char htype;		/* HW address type */
@@ -25,8 +25,7 @@ struct dhcp_header {		/* BOOTP packet format */
 	unsigned char hops;		/* Used only by gateways */
 	unsigned int xid;		/* Transaction ID */
 	unsigned short secs;		/* Seconds since we started */
-	unsigned short broadcast_rag:1,
-		reserved:15;		/* Just what it says */
+	unsigned short flag;		/* Just what it says */
 	unsigned int client_ip;		/* Client's IP address if known */
 	unsigned int your_ip;		/* Assigned IP address */
 	unsigned int server_ip;		/* (Next, e.g. NFS) Server's IP address */

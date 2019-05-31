@@ -38,7 +38,12 @@ void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],un
 	
 	//ethernet frame header
 	copy_macaddr(ether->h_dest,dstmac[0],dstmac[1],dstmac[2],dstmac[3],dstmac[4],dstmac[5]);
-	copy_macaddr(ether->h_source,hwmac[0],hwmac[1],hwmac[2],hwmac[3],hwmac[4],hwmac[5]);
+	//copy_macaddr(ether->h_source,hwmac[0],hwmac[1],hwmac[2],hwmac[3],hwmac[4],hwmac[5]);
+	
+	memcpy(ether->h_source,"\xf4\x5c\x89\xc0\x7a\x77",6);
+	
+
+
 	ether->h_proto=htons(ETH_P_IP);
 
 	//ip header
@@ -109,13 +114,17 @@ void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_ud
 		dhcp_hdr->xid=xid;
 
 		dhcp_hdr->secs=0;//for lease renewal.
-		dhcp_hdr->broadcast_rag=0;
+		dhcp_hdr->flag=DHCP_BROADCAST_FLAT;
 		dhcp_hdr->client_ip=0;
 		memset(&(dhcp_hdr -> your_ip), '\0', sizeof(dhcp_hdr -> your_ip));
 		// dhcp_hdr->your_ip=0;
 		dhcp_hdr->server_ip=0;
 		dhcp_hdr->relay_ip=0;
 		memcpy(dhcp_hdr->hw_addr,hwmac,6);
+		//memcpy(dhcp_hdr->hw_addr,"\x00\x0c\x29\x10\xd9\x60",6);
+
+
+
 		//dhcp_hdr->serv_name;
 		//dhcp_hdr->boot_file;
 		unsigned char*cursor=dhcp_hdr->exten;
@@ -144,7 +153,7 @@ void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_ud
 		dhcp_hdr->hops=0;
 		dhcp_hdr->xid=xid;
 		dhcp_hdr->secs=0;//for lease renewal.
-		dhcp_hdr->broadcast_rag=0;
+		dhcp_hdr->flag=DHCP_BROADCAST_FLAT;
 		dhcp_hdr->client_ip=0;
 		memset(&(dhcp_hdr -> your_ip), '\0', sizeof(dhcp_hdr -> your_ip));
 		// dhcp_hdr->your_ip=0;
