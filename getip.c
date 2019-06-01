@@ -73,7 +73,7 @@ int main(int argc,char **argv){
 		{
 			last -= 1;
 		}
-
+		xid++;
 		hwmac[last] += 0x01;
 	}
 	
@@ -146,7 +146,7 @@ int main(int argc,char **argv){
 	struct in_addr *dhcp_server_ip;
 	Packet *p;
 	struct dhcp_header *dhcp;
-	
+	int router_ipaddress=0;	
 
 	// get dhcp offer
 	while(1){
@@ -164,7 +164,7 @@ int main(int argc,char **argv){
 		if(dhcp -> op != 2) continue;
 
 		aquired_ipaddress = dhcp->your_ip;
-		
+		router_ipaddress= dhcp->server_ip;
 		
 		for(int offset = 4/* skip magic cookie*/;;){
 			unsigned char option = dhcp -> exten[offset];
@@ -239,8 +239,8 @@ int main(int argc,char **argv){
 
 
 	}
-
-	dhcp_protocol(sd,xid, hwmac,,&aquired_ipaddress, (unsigned int *)"\x08\x08\x08\x08",itface,DHCP_DISCOVER);	
+	
+	dhcp_protocol(sd,xid,hwmac, "\x9c\x5c\xf9\x2a\x9f\x00",&aquired_ipaddress, (unsigned int *)"\x08\x08\x08\x08",itface,DHCP_DISCOVER);	
 
 	
 

@@ -19,7 +19,10 @@ int main(int argc, char **argv)
 			printf("child:%d is ready to go\n",i);
 			char buf[10];
 			sprintf(buf,"%d",i);
-			execlp("getip","getip", argv[2], buf, argv[3], NULL);
+			if(execlp("./getip","./getip", argv[2], buf, argv[3], NULL)<0){
+				perror("cxeclp()");
+				exit(-1);
+			};
 		}
 		else
 		{
