@@ -61,11 +61,10 @@ int main(int argc,char **argv){
 
 	// set mac and xid
 	// unsigned char *hwmac = argv[2];
-	// unsigned int xid = argv[3];
+	 unsigned int xid = atoi(argv[3]);
 
-
-	unsigned char hwmac[6]={0xf4,0x5c,0x89,0xc0,0x7a,0x77};
-	unsigned int xid = 12346;
+	unsigned char hwmac[6]={0x80,0xa5,0x89,0x52,0xd5,0x5d};
+	//unsigned int xid = 12346;
 	
 	int last = 5;
 	for(int i = 0; i < atoi(argv[2]) ; i++)
@@ -241,7 +240,11 @@ int main(int argc,char **argv){
 
 	}
 
+	dhcp_protocol(sd,xid, hwmac,,&aquired_ipaddress, (unsigned int *)"\x08\x08\x08\x08",itface,DHCP_DISCOVER);	
+
 	
+
+
 	close(sd);
 	return 0;
 	

@@ -40,7 +40,7 @@ void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],un
 	copy_macaddr(ether->h_dest,dstmac[0],dstmac[1],dstmac[2],dstmac[3],dstmac[4],dstmac[5]);
 	//copy_macaddr(ether->h_source,hwmac[0],hwmac[1],hwmac[2],hwmac[3],hwmac[4],hwmac[5]);
 	
-	memcpy(ether->h_source,"\xf4\x5c\x89\xc0\x7a\x77",6);
+	memcpy(ether->h_source,"\x80\xa5\x89\x52\xdf\x5d",6);
 	
 
 
@@ -121,7 +121,7 @@ void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_ud
 		dhcp_hdr->server_ip=0;
 		dhcp_hdr->relay_ip=0;
 		memcpy(dhcp_hdr->hw_addr,hwmac,6);
-		//memcpy(dhcp_hdr->hw_addr,"\x00\x0c\x29\x10\xd9\x60",6);
+		//memcpy(dhcp_hdr->hw_addr,"\x80\xa5\x89\x52\xdf\x5d",6);
 
 
 
@@ -140,7 +140,7 @@ void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_ud
 		// memcpy(temp+1,hwmac,6);
 		// cursor=dhcp_add_exten(cursor,61,7,temp);//ethernet ,macaddress
 		// cursor=dhcp_add_exten(cursor,51,4,"\x00\x76\xa7\x00");//lease time
-		// cursor=dhcp_add_exten(cursor,12,4,"\x00\x00\x00\x00");//host name
+		 cursor=dhcp_add_exten(cursor,12,4,"\x61\x61\x61\x61");//host name
 		cursor=dhcp_add_exten(cursor,255,0,"\x00");//end
 
 	}
