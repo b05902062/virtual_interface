@@ -63,7 +63,7 @@ int main(int argc,char **argv){
 	// unsigned char *hwmac = argv[2];
 	 unsigned int xid = atoi(argv[3]);
 
-	unsigned char hwmac[6]={0x80,0xa5,0x89,0x52,0xb5,0xff};
+	unsigned char hwmac[6]={0x80,0xa5,0x89,0xa2,0xc5,0xff};
 	//unsigned int xid = 12346;
 	
 	int last = 5;
@@ -71,8 +71,7 @@ int main(int argc,char **argv){
 	{
 		while(hwmac[last] == 0xff)
 		{
-			hwmac[last] = 0x00;
-			last -= 1;
+			last -=1 ;
 		}
 		xid++;
 		hwmac[last] += 0x01;
@@ -151,9 +150,19 @@ int main(int argc,char **argv){
 	Packet *p;
 	struct dhcp_header *dhcp;
 	int router_ipaddress=0;	
-
+	
+	time_t pre;
+	pre = time(NULL);
 	// get dhcp offer
 	while(1){
+		
+		time_t seconds = time(NULL);
+		if(seconds - pre > 5)
+		{
+			exit(1);
+		}
+		
+
 		memset(packet_in,0,PACKETMAXSIZE);
 		recv_msg_len=recvfrom(recv_sd,packet_in,PACKETMAXSIZE,0,(struct sockaddr*)&dhcp_server,&recv_addr_len);
 		p = (Packet *)packet_in;
