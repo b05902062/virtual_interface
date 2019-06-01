@@ -38,7 +38,7 @@ struct mac_address{
 
 
 // struct dhcp_lease_info *dhcp_protocol(int sd,unsigned char*hwmac,unsigned int a_ip, struct ifreq itface,unsigned int type, unsigned int*server_ip);
-struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *scrip, unsigned int *dstip, struct ifreq itface,unsigned int type);
+struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *scrip, unsigned int *dstip, struct ifreq itface,unsigned char* fixed_mac, unsigned int type);
 int strncmp_with_null(unsigned char* s1,unsigned char *s2,int number);
 void *initiate_interface(void*arg);
 void *recv_worker(void *arg);
@@ -63,7 +63,7 @@ int main(int argc,char **argv){
 	// unsigned char *hwmac = argv[2];
 	 unsigned int xid = atoi(argv[3]);
 
-	unsigned char hwmac[6]={0x80,0xa5,0x89,0x52,0xd5,0x5d};
+	unsigned char hwmac[6]={0x80,0xa5,0x89,0x52,0xb5,0xff};
 	//unsigned int xid = 12346;
 	
 	int last = 5;
@@ -71,6 +71,7 @@ int main(int argc,char **argv){
 	{
 		while(hwmac[last] == 0xff)
 		{
+			hwmac[last] = 0x00;
 			last -= 1;
 		}
 		xid++;
@@ -106,12 +107,15 @@ int main(int argc,char **argv){
 
 	}
 
+	unsigned char fixed_mac[6];
+	memcpy(fixed_mac, itface.ifr_hwaddr.sa_data, 6);
 	// printf("mac_addr");
 	// for(int iii=0;iii<6;iii++){
 	// 	printf(":%02x",(unsigned char)(itface.ifr_hwaddr.sa_data[iii]));
 
 	// }
 	// printf("\n");
+	
 	
 	if(ioctl(sd, SIOCGIFINDEX, &itface) < 0){
 		perror("ioctl(SIOCGIFINDEX)");
@@ -127,7 +131,7 @@ int main(int argc,char **argv){
 
 
 	// send DHCP_DISCOVER
-	dhcp_protocol(sd,xid, hwmac,"\xff\xff\xff\xff\xff\xff", (unsigned int *)"\x00\x00\x00\x00", (unsigned int *)"\xff\xff\xff\xff",itface,DHCP_DISCOVER);	
+	dhcp_protocol(sd,xid, hwmac,"\xff\xff\xff\xff\xff\xff", (unsigned int *)"\x00\x00\x00\x00", (unsigned int *)"\xff\xff\xff\xff",itface, fixed_mac, DHCP_DISCOVER);	
 	printf("[DHCP DISCOVER]\n");
 	int recv_sd=0;
 	if((recv_sd=socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP)))<0){
@@ -197,7 +201,7 @@ int main(int argc,char **argv){
 
 	}
 	// send dhcp_request
-	dhcp_protocol(sd,xid, hwmac,p -> l2.srcMAC, &(dhcp -> your_ip), (unsigned int*)dhcp_server_ip, itface,DHCP_REQUEST);	
+	dhcp_protocol(sd,xid, hwmac,p -> l2.srcMAC, &(dhcp -> your_ip), (unsigned int*)dhcp_server_ip, itface, fixed_mac, DHCP_REQUEST);	
 	printf("[DHCP REQUEST]\n");
 
 	// wait dhcp_ack
@@ -240,7 +244,7 @@ int main(int argc,char **argv){
 
 	}
 	
-	dhcp_protocol(sd,xid,hwmac, "\x9c\x5c\xf9\x2a\x9f\x00",&aquired_ipaddress, (unsigned int *)"\x08\x08\x08\x08",itface,DHCP_DISCOVER);	
+	dhcp_protocol(sd,xid,hwmac, "\x9c\x5c\xf9\x2a\x9f\x00",&aquired_ipaddress, (unsigned int *)"\x08\x08\x08\x08",itface ,fixed_mac, DHCP_DISCOVER);	
 
 	
 
@@ -260,7 +264,7 @@ int main(int argc,char **argv){
 }
 
 
-struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *srcip, unsigned int *dstip, struct ifreq itface,unsigned int type){
+struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *srcip, unsigned int *dstip, struct ifreq itface,unsigned char* fixed_mac, unsigned int type){
 
 	struct dhcp_lease_info *dli=(struct dhcp_lease_info*)malloc(sizeof(struct dhcp_lease_info));
 	memset(dli,0,sizeof(struct dhcp_lease_info));
@@ -273,7 +277,7 @@ struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwm
 	// inet_pton(AF_INET,"255.255.255.255",&dip);
 	
 	//Host ip address will be returned in hip.
-	construct_dhcp(xid,type,hwmac,dstmac, srcip, dstip, packet, dstip);
+	construct_dhcp(xid,type,hwmac,dstmac, srcip, dstip, packet, fixed_mac, dstip);
 
 	
 

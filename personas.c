@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include<sys/wait.h>
 #include <unistd.h>
+#include <string.h>
 int main(int argc, char **argv)
 {	
 	int children_nm;
@@ -16,11 +17,15 @@ int main(int argc, char **argv)
 		pid[i] = fork();
 		if(pid[i] == 0)
 		{
-			printf("child:%d is ready to go\n",i);
+			//printf("child:%d is ready to go\n",i);
 			char buf[10];
 			sprintf(buf,"%d",i);
-			if(execlp("./getip","./getip", argv[2], buf, argv[3], NULL)<0){
-				perror("cxeclp()");
+			char str1[100], str2[100];
+			memcpy(str1, argv[2], strlen(argv[2]));
+			memcpy(str2, argv[3], strlen(argv[3]));
+			if(execlp("./getip","./getip", str1, buf, str2, (char*) 0)<0){
+				perror("execlp()");
+				printf("child:%d\n",i);
 				exit(-1);
 			};
 		}
@@ -30,7 +35,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	while(wait(NULL));
+	while(wait(NULL)>0);
 
-	puts("childrne are all die");
+	puts("children are all dead");
 }
