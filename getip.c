@@ -16,6 +16,7 @@ by wang zih_min
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <pthread.h>
+#include <time.h>
 
 char interface[IFNAMSIZ]={0};
 #define ARPHRD_ETHER 1
@@ -38,7 +39,7 @@ struct mac_address{
 
 
 // struct dhcp_lease_info *dhcp_protocol(int sd,unsigned char*hwmac,unsigned int a_ip, struct ifreq itface,unsigned int type, unsigned int*server_ip);
-struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *scrip, unsigned int *dstip, struct ifreq itface,unsigned int type);
+struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *scrip, unsigned int *dstip, struct ifreq itface,unsigned char* fixed_mac, unsigned int type);
 int strncmp_with_null(unsigned char* s1,unsigned char *s2,int number);
 void *initiate_interface(void*arg);
 void *recv_worker(void *arg);
@@ -63,7 +64,7 @@ int main(int argc,char **argv){
 	// unsigned char *hwmac = argv[2];
 	 unsigned int xid = atoi(argv[3]);
 
-	unsigned char hwmac[6]={0x80,0xa5,0x89,0x52,0xd5,0x5d};
+	unsigned char hwmac[6]={0x80,0xa5,0x89,0xa2,0xc5,0xff};
 	//unsigned int xid = 12346;
 	
 	int last = 5;
@@ -71,7 +72,7 @@ int main(int argc,char **argv){
 	{
 		while(hwmac[last] == 0xff)
 		{
-			last -= 1;
+			last -=1 ;
 		}
 		xid++;
 		hwmac[last] += 0x01;
@@ -92,26 +93,30 @@ int main(int argc,char **argv){
 	struct ifreq itface;
 	memset(&itface,0,sizeof(struct ifreq));
 	
-	strncpy(itface.ifr_name,interface,IFNAMSIZ);
+	strncpy(itface.ifr_name,interface,strlen(interface));
 
-	if(ioctl(sd,SIOCGIFHWADDR, &itface) > 0){
+	// strncpy(itface.ifr_name,"ens38",IFNAMSIZ);
+	if(ioctl(sd,SIOCGIFHWADDR, &itface) < 0){
 		perror("ioctl(SIOCGIFHWADDR)");	
 		exit(-1);
 	}
-	
 	//check whether it is ethernet interface
 	if(itface.ifr_hwaddr.sa_family!=ARPHRD_ETHER){
+		fprintf(stderr, "interface: %s\n", argv[1]);
 		fprintf(stderr,"interface provided is not a ethernet interface\n");
 		exit(-1);
 
 	}
 
+	unsigned char fixed_mac[6];
+	memcpy(fixed_mac, itface.ifr_hwaddr.sa_data, 6);
 	// printf("mac_addr");
 	// for(int iii=0;iii<6;iii++){
 	// 	printf(":%02x",(unsigned char)(itface.ifr_hwaddr.sa_data[iii]));
 
 	// }
 	// printf("\n");
+	
 	
 	if(ioctl(sd, SIOCGIFINDEX, &itface) < 0){
 		perror("ioctl(SIOCGIFINDEX)");
@@ -124,129 +129,152 @@ int main(int argc,char **argv){
 	ifaddr.sll_family=AF_PACKET;
 	ifaddr.sll_ifindex=itface.ifr_ifindex;
 	ifaddr.sll_protocol=htons(ETH_P_IP);
-
-
-	// send DHCP_DISCOVER
-	dhcp_protocol(sd,xid, hwmac,"\xff\xff\xff\xff\xff\xff", (unsigned int *)"\x00\x00\x00\x00", (unsigned int *)"\xff\xff\xff\xff",itface,DHCP_DISCOVER);	
-	printf("[DHCP DISCOVER]\n");
-	int recv_sd=0;
-	if((recv_sd=socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP)))<0){
-		perror("recv socket()");
-		exit(0);
-	}
-
-	unsigned char packet_in[PACKETMAXSIZE]={0};
-	struct sockaddr_in dhcp_server;
-	memset(&dhcp_server,0,sizeof(struct sockaddr_in));
-	unsigned int recv_addr_len=sizeof(struct sockaddr_in);
-	int recv_msg_len=0;
-	unsigned char dhcp_port[2] = {0x00, 0x43};
-
-	int aquired_ipaddress=0;
-	struct in_addr *dhcp_server_ip;
-	Packet *p;
-	struct dhcp_header *dhcp;
-	int router_ipaddress=0;	
-
-	// get dhcp offer
+	int timeout = 0;
 	while(1){
-		memset(packet_in,0,PACKETMAXSIZE);
-		recv_msg_len=recvfrom(recv_sd,packet_in,PACKETMAXSIZE,0,(struct sockaddr*)&dhcp_server,&recv_addr_len);
-		p = (Packet *)packet_in;
-		if(memcmp(p -> udp.srcPort, dhcp_port, 2) != 0){
-			continue;
+		if(timeout) printf("timeout\n");
+		timeout = 0;
+		// send DHCP_DISCOVER
+		dhcp_protocol(sd,xid, hwmac,"\xff\xff\xff\xff\xff\xff", (unsigned int *)"\x00\x00\x00\x00", (unsigned int *)"\xff\xff\xff\xff",itface, fixed_mac, DHCP_DISCOVER);	
+		printf("[DHCP DISCOVER]\n");
+		int recv_sd=0;
+		if((recv_sd=socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP)))<0){
+			perror("recv socket()");
+			exit(0);
 		}
 
-		// printf("get dhcp\n");
-		dhcp = (struct dhcp_header*)&(p -> data);
+		unsigned char packet_in[PACKETMAXSIZE]={0};
+		struct sockaddr_in dhcp_server;
+		memset(&dhcp_server,0,sizeof(struct sockaddr_in));
+		unsigned int recv_addr_len=sizeof(struct sockaddr_in);
+		int recv_msg_len=0;
+		unsigned char dhcp_port[2] = {0x00, 0x43};
 
-		if(dhcp -> xid != xid) continue;
-		if(dhcp -> op != 2) continue;
+		int aquired_ipaddress=0;
+		struct in_addr *dhcp_server_ip;
+		Packet *p;
+		struct dhcp_header *dhcp;
+		int router_ipaddress=0;	
+	
+	
+		// get dhcp offer
+		time_t pre;
+		pre = time(NULL);
 
-		aquired_ipaddress = dhcp->your_ip;
-		router_ipaddress= dhcp->server_ip;
-		
-		for(int offset = 4/* skip magic cookie*/;;){
-			unsigned char option = dhcp -> exten[offset];
-			if(option == 0xff) break;
-			offset ++;
-			int len = dhcp -> exten[offset];
-			offset ++;
-			switch(option){
-				case 53: //message type
-					if(dhcp -> exten[offset] == DHCP_OFFER){
-						printf("[DHCP OFFER] ");
-						printf("get ip: %s\n", inet_ntoa(*(struct in_addr *)&(dhcp -> your_ip)));
-					}else{
-						printf("something wrong!\n");
-						exit(1);
-					}
-					break;
-				case 54:
-					dhcp_server_ip = (struct in_addr *)&(dhcp -> exten[offset]);
-					// printf("server ip : %s\n", inet_ntoa(*dhcp_server_ip));
-					break;
-				default:
-					break;
+		while(1){
+			time_t seconds = time(NULL);
+			if(seconds - pre > 5)
+			{
+				timeout = 1;
+				break;
 			}
-			offset += len;
-		
-		}
-		break;
+			
 
-
-	}
-	// send dhcp_request
-	dhcp_protocol(sd,xid, hwmac,p -> l2.srcMAC, &(dhcp -> your_ip), (unsigned int*)dhcp_server_ip, itface,DHCP_REQUEST);	
-	printf("[DHCP REQUEST]\n");
-
-	// wait dhcp_ack
-	while(1){
-		memset(packet_in,0,PACKETMAXSIZE);
-		recv_msg_len=recvfrom(recv_sd,packet_in,PACKETMAXSIZE,0,(struct sockaddr*)&dhcp_server,&recv_addr_len);
-		p = (Packet *)packet_in;
-		if(memcmp(p -> udp.srcPort, dhcp_port, 2) != 0){
-			continue;
-		}
-
-		dhcp = (struct dhcp_header*)&(p -> data);
-
-		if(dhcp -> xid != xid) continue;
-		if(dhcp -> op != 2) continue;
-		
-		for(int offset = 4/* skip magic cookie*/;;){
-			unsigned char option = dhcp -> exten[offset];
-			if(option == 0xff) break;
-			offset ++;
-			int len = dhcp -> exten[offset];
-			offset ++;
-			switch(option){
-				case 53: //message type
-					if(dhcp -> exten[offset] == DHCP_ACK){
-						printf("[DHCP ACK] success!\n");
-					}else{
-						printf("something wrong!\n");
-						exit(1);
-					}
-					break;
-				default:
-					break;
+			memset(packet_in,0,PACKETMAXSIZE);
+			recv_msg_len=recvfrom(recv_sd,packet_in,PACKETMAXSIZE,0,(struct sockaddr*)&dhcp_server,&recv_addr_len);
+			p = (Packet *)packet_in;
+			if(memcmp(p -> udp.srcPort, dhcp_port, 2) != 0){
+				continue;
 			}
-			offset += len;
-		
+
+			// printf("get dhcp\n");
+			dhcp = (struct dhcp_header*)&(p -> data);
+
+			if(dhcp -> xid != xid) continue;
+			if(dhcp -> op != 2) continue;
+
+			aquired_ipaddress = dhcp->your_ip;
+			router_ipaddress= dhcp->server_ip;
+			
+			for(int offset = 4/* skip magic cookie*/;;){
+				unsigned char option = dhcp -> exten[offset];
+				if(option == 0xff) break;
+				offset ++;
+				int len = dhcp -> exten[offset];
+				offset ++;
+				switch(option){
+					case 53: //message type
+						if(dhcp -> exten[offset] == DHCP_OFFER){
+							printf("[DHCP OFFER] ");
+							printf("get ip: %s\n", inet_ntoa(*(struct in_addr *)&(dhcp -> your_ip)));
+						}else{
+							printf("something wrong!\n");
+							exit(1);
+						}
+						break;
+					case 54:
+						dhcp_server_ip = (struct in_addr *)&(dhcp -> exten[offset]);
+						// printf("server ip : %s\n", inet_ntoa(*dhcp_server_ip));
+						break;
+					default:
+						break;
+				}
+				offset += len;
+			
+			}
+			break;
 		}
+		if(timeout) continue;
+		// send dhcp_request
+		dhcp_protocol(sd,xid, hwmac,p -> l2.srcMAC, &(dhcp -> your_ip), (unsigned int*)dhcp_server_ip, itface, fixed_mac, DHCP_REQUEST);	
+		printf("[DHCP REQUEST]\n");
+
+		// wait dhcp_ack
+		pre = time(NULL);
+		while(1){
+
+			time_t seconds = time(NULL);
+			if(seconds - pre > 5)
+			{
+				timeout = 1;
+				break;
+			}
+
+			memset(packet_in,0,PACKETMAXSIZE);
+			recv_msg_len=recvfrom(recv_sd,packet_in,PACKETMAXSIZE,0,(struct sockaddr*)&dhcp_server,&recv_addr_len);
+			p = (Packet *)packet_in;
+			if(memcmp(p -> udp.srcPort, dhcp_port, 2) != 0){
+				continue;
+			}
+
+			dhcp = (struct dhcp_header*)&(p -> data);
+
+			if(dhcp -> xid != xid) continue;
+			if(dhcp -> op != 2) continue;
+			
+			for(int offset = 4/* skip magic cookie*/;;){
+				unsigned char option = dhcp -> exten[offset];
+				if(option == 0xff) break;
+				offset ++;
+				int len = dhcp -> exten[offset];
+				offset ++;
+				switch(option){
+					case 53: //message type
+						if(dhcp -> exten[offset] == DHCP_ACK){
+							printf("[DHCP ACK] success!\n");
+						}else{
+							printf("something wrong!\n");
+							exit(1);
+						}
+						break;
+					default:
+						break;
+				}
+				offset += len;
+			
+			}
+			break;
+
+
+		}
+		if(timeout) continue;
+		dhcp_protocol(sd,xid,hwmac, "\x9c\x5c\xf9\x2a\x9f\x00",&aquired_ipaddress, (unsigned int *)"\x08\x08\x08\x08",itface ,fixed_mac, DHCP_DISCOVER);	
 		break;
-
-
 	}
 	
-	dhcp_protocol(sd,xid,hwmac, "\x9c\x5c\xf9\x2a\x9f\x00",&aquired_ipaddress, (unsigned int *)"\x08\x08\x08\x08",itface,DHCP_DISCOVER);	
 
-	
-
-
+	printf("[FINISH]\n");
 	close(sd);
-	return 0;
+	exit(0);
 	
 	
 	// pthread_t recv_worker_t=0;
@@ -260,7 +288,7 @@ int main(int argc,char **argv){
 }
 
 
-struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *srcip, unsigned int *dstip, struct ifreq itface,unsigned int type){
+struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *srcip, unsigned int *dstip, struct ifreq itface,unsigned char* fixed_mac, unsigned int type){
 
 	struct dhcp_lease_info *dli=(struct dhcp_lease_info*)malloc(sizeof(struct dhcp_lease_info));
 	memset(dli,0,sizeof(struct dhcp_lease_info));
@@ -273,7 +301,7 @@ struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwm
 	// inet_pton(AF_INET,"255.255.255.255",&dip);
 	
 	//Host ip address will be returned in hip.
-	construct_dhcp(xid,type,hwmac,dstmac, srcip, dstip, packet, dstip);
+	construct_dhcp(xid,type,hwmac,dstmac, srcip, dstip, packet, fixed_mac, dstip);
 
 	
 

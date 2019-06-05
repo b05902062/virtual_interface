@@ -89,7 +89,7 @@ unsigned short checksum(void* addr,int count);
 
 void copy_macaddr(unsigned char *sll_addr,unsigned char first,unsigned char second,unsigned char third,unsigned char fourth,unsigned char fifth,unsigned char sixth);
 
-void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],unsigned char dstmac[6],unsigned int *hip,unsigned int *dip,unsigned char *packet,unsigned int *server_ip);
+void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],unsigned char dstmac[6],unsigned int *hip,unsigned int *dip,unsigned char *packet, unsigned char* fixed_mac, unsigned int *server_ip);
 
 void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_udp_hdr* p_udp,unsigned char *hwmac,unsigned int*hip,unsigned int *server_ip);
 

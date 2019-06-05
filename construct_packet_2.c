@@ -28,7 +28,7 @@
 // };
 
 
-void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],unsigned char dstmac[6],unsigned int *hip,unsigned int *dip,unsigned char *packet, unsigned int* server_ip){
+void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],unsigned char dstmac[6],unsigned int *hip,unsigned int *dip,unsigned char *packet, unsigned char* fixed_mac, unsigned int* server_ip){
 
 
 	memset(packet,0,PACKETMAXSIZE);
@@ -40,7 +40,7 @@ void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],un
 	copy_macaddr(ether->h_dest,dstmac[0],dstmac[1],dstmac[2],dstmac[3],dstmac[4],dstmac[5]);
 	//copy_macaddr(ether->h_source,hwmac[0],hwmac[1],hwmac[2],hwmac[3],hwmac[4],hwmac[5]);
 	
-	memcpy(ether->h_source,"\x80\xa5\x89\x52\xdf\x5d",6);
+	memcpy(ether->h_source, fixed_mac, 6);
 	
 
 
