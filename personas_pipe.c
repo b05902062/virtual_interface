@@ -10,7 +10,7 @@ int main(int argc, char **argv)
 	int children_nm;
 	pid_t pid[MAX_CHILD];
 	if(argc!=4){
-		fprintf(stderr,"usage: ./personas_pipe <process_nm> <name of a connected interface>  <xid>\n");
+		fprintf(stderr,"usage: ./personas <process_nm> <name of a connected interface>  <xid>\n");
 		exit(-1);
 	}
 	sscanf(argv[1],"%d", &children_nm);
@@ -66,22 +66,29 @@ int main(int argc, char **argv)
 		for(int i = 0; i < children_nm; i++){
 			FD_SET(pfd[i][0], &readfds);
 		}
-		select(maxfd+1, &readfds, NULL, NULL, &tv);
+		// printf("select\n");
+		if(select(maxfd+1, &readfds, NULL, NULL, &tv)<0){
+			perror("select()");
+			exit(-1);
+		};
 
 		for(int i = 0; i < children_nm; i++){
 			if(FD_ISSET(pfd[i][0], &readfds)){
+				printf("1");
 				char buf[1000] = {};
-				int n;
-				while(n = read(pfd[i][0], buf, sizeof(buf)-1) > 0 ){
+				int n=0;
+				while((n = read(pfd[i][0], buf, sizeof(buf)-1)) > 0 ){
+				//n = read(pfd[i][0], buf, sizeof(buf)-1);
 					// processing child input
-					printf("parent get:[start]%s[end]\n", buf);
-				}
+					printf("parent get from %d %d bytes:[start]%s[end]\n",i,n, buf);
+					memset(buf,0,1000);
+				}	
 				
 			}
 		}
 	}
 	printf("wait\n");
-	while(wait(NULL)>0);
+	while(wait(NULL)>0){};
 
 	puts("children are all dead");
 	for(int i = 0; i < children_nm; i++){

@@ -1,3 +1,3 @@
 all:
-	gcc getip.c construct_packet_2.c -o getip
-	gcc personas.c -o personas
+	gcc getip_fprintf.c construct_packet.c -o getip
+	gcc personas_pipe.c -o personas
