@@ -36,8 +36,9 @@ struct mac_address{
 
 };
 
-
-
+void send_fd(char *s){
+	write(STDOUT_FILENO, s, strlen(s));
+}
 // struct dhcp_lease_info *dhcp_protocol(int sd,unsigned char*hwmac,unsigned int a_ip, struct ifreq itface,unsigned int type, unsigned int*server_ip);
 struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *scrip, unsigned int *dstip, struct ifreq itface,unsigned char* fixed_mac, unsigned int type);
 int strncmp_with_null(unsigned char* s1,unsigned char *s2,int number);
@@ -62,7 +63,7 @@ int main(int argc,char **argv){
 
 	// set mac and xid
 	// unsigned char *hwmac = argv[2];
-	 unsigned int xid = atoi(argv[3]);
+	unsigned int xid = atoi(argv[3]);
 
 	unsigned char hwmac[6]={0x80,0xa5,0x89,0xa2,0xc5,0xff};
 	//unsigned int xid = 12346;
@@ -131,11 +132,11 @@ int main(int argc,char **argv){
 	ifaddr.sll_protocol=htons(ETH_P_IP);
 	int timeout = 0;
 	while(1){
-		if(timeout) fprintf(stdout,"timeout\n");
+		if(timeout) send_fd("timeout");
 		timeout = 0;
 		// send DHCP_DISCOVER
 		dhcp_protocol(sd,xid, hwmac,"\xff\xff\xff\xff\xff\xff", (unsigned int *)"\x00\x00\x00\x00", (unsigned int *)"\xff\xff\xff\xff",itface, fixed_mac, DHCP_DISCOVER);	
-		fprintf(stdout,"[DHCP DISCOVER]\n");
+		send_fd("[DHCP_DISCOVER]");
 		int recv_sd=0;
 		if((recv_sd=socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP)))<0){
 			perror("recv socket()");
@@ -194,10 +195,11 @@ int main(int argc,char **argv){
 				switch(option){
 					case 53: //message type
 						if(dhcp -> exten[offset] == DHCP_OFFER){
-							fprintf(stdout,"[DHCP OFFER] ");
-							fprintf(stdout,"get ip: %s\n", inet_ntoa(*(struct in_addr *)&(dhcp -> your_ip)));
+							send_fd("[DHCP OFFER]");
+							send_fd(inet_ntoa(*(struct in_addr *)&(dhcp -> your_ip)));
+							// fprintf(stdout,"get ip: %s\n", inet_ntoa(*(struct in_addr *)&(dhcp -> your_ip)));
 						}else{
-							fprintf(stdout,"something wrong!\n");
+							send_fd("sth wrong!");
 							exit(1);
 						}
 						break;
@@ -216,7 +218,7 @@ int main(int argc,char **argv){
 		if(timeout) continue;
 		// send dhcp_request
 		dhcp_protocol(sd,xid, hwmac,p -> l2.srcMAC, &(dhcp -> your_ip), (unsigned int*)dhcp_server_ip, itface, fixed_mac, DHCP_REQUEST);	
-		fprintf(stdout,"[DHCP REQUEST]\n");
+		send_fd("[DHCP REQUEST]");
 
 		// wait dhcp_ack
 		pre = time(NULL);
@@ -250,9 +252,9 @@ int main(int argc,char **argv){
 				switch(option){
 					case 53: //message type
 						if(dhcp -> exten[offset] == DHCP_ACK){
-							fprintf(stdout,"[DHCP ACK] success!\n");
+							send_fd("[DHCP ACK] success!");
 						}else{
-							fprintf(stdout,"something wrong!\n");
+							send_fd("something wrong!");
 							exit(1);
 						}
 						break;
@@ -272,7 +274,8 @@ int main(int argc,char **argv){
 	}
 	
 	//sleep(5);
-	fprintf(stdout,"[FINISH]\n");
+	send_fd("[FINISH]");
+	while(1);
 	close(sd);
 	exit(0);
 	

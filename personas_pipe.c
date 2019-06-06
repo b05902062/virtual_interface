@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 		if(pid[i] == 0)
 		{
 			// need to handle parent's instruction to children
-			close(STDOUT_FILENO);
+			// close(STDOUT_FILENO);
 			dup2(pfd[i][1], STDOUT_FILENO);
 			close(pfd[i][0]);
 			close(pfd[i][1]);
@@ -74,15 +74,12 @@ int main(int argc, char **argv)
 
 		for(int i = 0; i < children_nm; i++){
 			if(FD_ISSET(pfd[i][0], &readfds)){
-				printf("1");
 				char buf[1000] = {};
-				int n=0;
-				while((n = read(pfd[i][0], buf, sizeof(buf)-1)) > 0 ){
+				int n = read(pfd[i][0], buf, sizeof(buf)-1);
 				//n = read(pfd[i][0], buf, sizeof(buf)-1);
 					// processing child input
-					printf("parent get from %d %d bytes:[start]%s[end]\n",i,n, buf);
-					memset(buf,0,1000);
-				}	
+				printf("parent get from %d %d bytes:[start]%s[end]\n",i,n, buf);
+				memset(buf,0,1000);	
 				
 			}
 		}
