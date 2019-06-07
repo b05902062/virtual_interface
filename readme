@@ -12,5 +12,5 @@
 * DHCP_RELEASE
 	* a dhcp payload to release ip
 
-* BAD_GUY
+* BAD_GUY (Sean)
 	* an adversary to release other uses' ip
