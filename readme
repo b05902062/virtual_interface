@@ -1,12 +1,13 @@
 ## TODO
 
-* Moniter
+* Moniter (Marvin Chung)
 	* an interface contains following function:
 		* view status: 
 			ip of dhcp server
 			number of childrn
 			child status(DISCOVER, getip, .....)
 		* send/recv message to/from children and moniter
+
 
 * DHCP_RELEASE
 	* a dhcp payload to release ip
