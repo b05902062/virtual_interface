@@ -9,9 +9,7 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 
-#include "dhcp.h"
-
-char interface[IFNAMSIZ]={0};
+extern char interface[IFNAMSIZ];
 static void send_fd(char*s);
 
 #endif

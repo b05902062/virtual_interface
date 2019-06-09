@@ -1,34 +1,7 @@
-#include "construct_packet.h"
-// struct ethhdr {
-// 	unsigned char	h_dest[ETH_ALEN];	/* destination eth addr	*/
-// 	unsigned char	h_source[ETH_ALEN];	/* source ether addr	*/
-// 	__be16		h_proto;		/* packet type ID field	*/
-// } __attribute__((packed));
+#include "construct_dhcp_packet.h"
 
-// struct iphdr {
-// #if defined(__LITTLE_ENDIAN_BITFIELD)
-// 	__u8	ihl:4,
-// 		version:4;
-// #elif defined (__BIG_ENDIAN_BITFIELD)
-// 	__u8	version:4,
-//   		ihl:4;
-// #else
-// #error	"Please fix <asm/byteorder.h>"
-// #endif
-// 	__u8	tos;
-// 	__u16	tot_len;
-// 	__u16	id;
-// 	__u16	frag_off;
-// 	__u8	ttl;
-// 	__u8	protocol;
-// 	__u16	check;
-// 	__u32	saddr;
-// 	__u32	daddr;
-// 	/*The options start here. */
-// };
+int construct_dhcp_packet(unsigned int xid,unsigned int type,unsigned char hwmac[6],unsigned char dstmac[6],unsigned int *hip,unsigned int *dip,unsigned char *packet, unsigned char* fixed_mac,unsigned int*server_ip,unsigned int *req_ip){
 
-
-void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],unsigned char dstmac[6],unsigned int *hip,unsigned int *dip,unsigned char *packet, unsigned char* fixed_mac, unsigned int* server_ip){
 
 
 	memset(packet,0,PACKETMAXSIZE);
@@ -38,12 +11,8 @@ void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],un
 	
 	//ethernet frame header
 	copy_macaddr(ether->h_dest,dstmac[0],dstmac[1],dstmac[2],dstmac[3],dstmac[4],dstmac[5]);
-	//copy_macaddr(ether->h_source,hwmac[0],hwmac[1],hwmac[2],hwmac[3],hwmac[4],hwmac[5]);
-	
+	//we do not create new interfaces,so we use the mac address of the computer this program is running on at layer two.
 	memcpy(ether->h_source, fixed_mac, 6);
-	
-
-
 	ether->h_proto=htons(ETH_P_IP);
 
 	//ip header
@@ -55,7 +24,6 @@ void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],un
 	ip->id = 88; // need to be random
 	ip->ttl = 64;
 	ip->protocol = (unsigned char)IPPROTO_UDP; //17
-
 	ip->saddr=*hip;
 	ip->daddr=*dip;
 	ip->check=checksum(ip,20);
@@ -76,20 +44,10 @@ void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],un
 	p_udp.udp_hdr.check=0;
 	
 
-	//Construct application layer packet.
-/*	unsigned char temp[7]={0};
-	memcpy(temp,hwmac,6);
-	printf("%s",temp);
 
-
-	for(int iii=0;iii<6;iii++){	
-		printf("%x",hwmac[iii]);
-	}
-	printf("\n");
-	for(int iii=0;iii<6;iii++){	
-		printf("%x",temp[iii]);
-	}*/
-	construct_dhcp_payload(xid, type,&p_udp,hwmac,hip, server_ip);
+	if(construct_dhcp_payload(xid, type,&p_udp,hwmac,dstmac,hip, dip,server_ip,req_ip)<0){
+		return -1;
+	};
 
 	//Compute checksum over the entire pseudo header, including application data.
 	p_udp.udp_hdr.check=checksum(&p_udp,sizeof(struct pseudo_udp_hdr));
@@ -99,22 +57,20 @@ void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],un
 	struct udphdr *udp=(struct udphdr*)(packet+sizeof(struct iphdr)+sizeof(struct ethhdr));
 	memcpy(udp,&(p_udp.udp_hdr),PACKETMAXSIZE-sizeof(struct ethhdr)-sizeof(struct iphdr));
 	
-	return;
+	return 0;
 }
 
-void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_udp_hdr* p_udp,unsigned char *hwmac,unsigned int*hip, unsigned int *server_ip){
+static int construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_udp_hdr* p_udp,unsigned char *hwmac,unsigned char*dstmac,unsigned int*hip,unsigned int*dip, unsigned int *server_ip,unsigned int *req_ip){
 
 	if(type == DHCP_DISCOVER/*dhcp*/){
 		struct dhcp_header* dhcp_hdr=(struct dhcp_header*)p_udp->data;
 		dhcp_hdr->op=1;
 		dhcp_hdr->htype=1;
 		dhcp_hdr->hlen=6;
-
 		dhcp_hdr->hops=0;
 		dhcp_hdr->xid=xid;
-
 		dhcp_hdr->secs=0;//for lease renewal.
-		dhcp_hdr->flag=DHCP_BROADCAST_FLAT;
+		dhcp_hdr->broadcast=1;
 		dhcp_hdr->client_ip=0;
 		memset(&(dhcp_hdr -> your_ip), '\0', sizeof(dhcp_hdr -> your_ip));
 		// dhcp_hdr->your_ip=0;
@@ -133,14 +89,14 @@ void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_ud
 		cursor+=4;
 
 		cursor=dhcp_add_exten(cursor,53,1,"\x01");//dhcp discover
-		// cursor=dhcp_add_exten(cursor,55,10,"\x01\x79\x03\x06\x0f\x77\xfc\x5f\x2c\x2e");//subnet mask,classless static route,router,dns server,domain name,domain search,pirvate/proxy autodiscovery,LDAP,netbios over name server,netbios over node type.
-		cursor=dhcp_add_exten(cursor,55,4,"\x01\x03\x06\x0f");
+		cursor=dhcp_add_exten(cursor,55,10,"\x01\x79\x03\x06\x0f\x77\xfc\x5f\x2c\x2e");//subnet mask,classless static route,router,dns server,domain name,domain search,pirvate/proxy autodiscovery,LDAP,netbios over name server,netbios over node type.
+		//cursor=dhcp_add_exten(cursor,55,4,"\x01\x03\x06\x0f");
 		// cursor=dhcp_add_exten(cursor,57,2,"\x04\x00");//max dhcp size
 		// unsigned char temp[8]="\x01";
 		// memcpy(temp+1,hwmac,6);
 		// cursor=dhcp_add_exten(cursor,61,7,temp);//ethernet ,macaddress
 		// cursor=dhcp_add_exten(cursor,51,4,"\x00\x76\xa7\x00");//lease time
-		 cursor=dhcp_add_exten(cursor,12,4,"\x61\x61\x61\x61");//host name
+		cursor=dhcp_add_exten(cursor,12,4,"\x61\x61\x61\x61");//host name
 		cursor=dhcp_add_exten(cursor,255,0,"\x00");//end
 
 	}
@@ -153,7 +109,7 @@ void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_ud
 		dhcp_hdr->hops=0;
 		dhcp_hdr->xid=xid;
 		dhcp_hdr->secs=0;//for lease renewal.
-		dhcp_hdr->flag=DHCP_BROADCAST_FLAT;
+		dhcp_hdr->broadcast=1;
 		dhcp_hdr->client_ip=0;
 		memset(&(dhcp_hdr -> your_ip), '\0', sizeof(dhcp_hdr -> your_ip));
 		// dhcp_hdr->your_ip=0;
@@ -178,7 +134,7 @@ void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_ud
 		//cursor=dhcp_add_exten(cursor,51,4,"\x00\x76\xa7\x00");//lease time
 		// cursor=dhcp_add_exten(cursor,12,4,"\x00\x00\x00\x00");//host name
 		cursor=dhcp_add_exten(cursor, 54, 4, (unsigned char*)server_ip);
-		cursor=dhcp_add_exten(cursor,50,4,(unsigned char*)hip);//request ip address
+		cursor=dhcp_add_exten(cursor,50,4,(unsigned char*)req_ip);//request ip address
 		// cursor=dhcp_add_exten(cursor, 57, 2, "\x05\xdc");//MAX message size
 		// cursor=dhcp_add_exten(cursor, 55, 10, "\x01\x03\x06\x0f\x1a\x1c\x33\x3a\x3b\x2b");
 		cursor=dhcp_add_exten(cursor,255,0,"\x00");//end
@@ -192,7 +148,7 @@ void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_ud
 		dhcp_hdr->hops=0;
 		dhcp_hdr->xid=xid;
 		dhcp_hdr->secs=0;//for lease renewal.
-		dhcp_hdr->flag=DHCP_BROADCAST_FLAT;
+		dhcp_hdr->broadcast=0;
 		dhcp_hdr->client_ip=0;
 		memcpy(&(dhcp_hdr -> client_ip),hip, sizeof(int));
 		memset(&(dhcp_hdr -> your_ip), '\0', sizeof(int));
@@ -221,9 +177,10 @@ void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_ud
 	}
 	else{
 		fprintf(stderr,"Doesn't support this type.");
+		return -1;
 		//Do nothing.
 	}
-	return;
+	return 0;
 
 }
 unsigned char*dhcp_add_exten(unsigned char*cursor,unsigned char code,unsigned char length,unsigned char* value){

@@ -5,7 +5,8 @@ by wang zih_min
 
 */
 #include "virtual_interface.h"
-
+#include "dhcp_protocol.h"
+char interface[IFNAMSIZ]={0};
 
 int main(int argc,char **argv){
 
@@ -37,6 +38,8 @@ int main(int argc,char **argv){
 
 		int kill_flag=0;
 		char * pch;
+		char command_cp[128];
+		memcpy(command_cp,command,128);
 		pch = strtok(command," ");
 		while (pch != NULL)
 		{
@@ -46,7 +49,7 @@ int main(int argc,char **argv){
 
 			}
 			else if(strcmp(pch,"DHCP")==0){
-				dhcp_protocol(hwmac_increment);
+				dhcp_protocol(command_cp,hwmac_increment);
 			}
 			else if(0){
 				//put supported protocol at here.

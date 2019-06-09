@@ -1,3 +1,6 @@
+#ifndef CONSTRUCT_DHCP_PACKET_H
+#define CONSTRUCT_DHCP_PACKET_H 
+
 #include <linux/ip.h>
 #include <net/if.h>
 #include <arpa/inet.h>
@@ -17,7 +20,7 @@
 #define DHCP_OFFER 2
 #define DHCP_REQUEST 3
 #define DHCP_ACK 5
-#define DHCP_BROADCAST_FLAT 128
+#define DHCP_RELEASE 7
 struct dhcp_header {		/* BOOTP packet format */
 	unsigned char op;			/* 1=request, 2=reply */
 	unsigned char htype;		/* HW address type */
@@ -25,7 +28,7 @@ struct dhcp_header {		/* BOOTP packet format */
 	unsigned char hops;		/* Used only by gateways */
 	unsigned int xid;		/* Transaction ID */
 	unsigned short secs;		/* Seconds since we started */
-	unsigned short flag;		/* Just what it says */
+	unsigned short broadcast:1, reserved:15;		/* Just what it says */
 	unsigned int client_ip;		/* Client's IP address if known */
 	unsigned int your_ip;		/* Assigned IP address */
 	unsigned int server_ip;		/* (Next, e.g. NFS) Server's IP address */
@@ -78,19 +81,19 @@ struct pseudo_udp_hdr{
         unsigned char data[PACKETMAXSIZE-sizeof(struct ethhdr)-sizeof(struct iphdr)-sizeof(struct udphdr)];
 };
 
-//Construct packet from Layer 2 to udp.
-//The port numbers in udp header will be modified in construct_application_packet().
-void construct_udp(unsigned int proto,unsigned char hwmac[6],unsigned char dstmac[6],unsigned int *hip,unsigned int *dip,unsigned char *packet);
+//used to construct from layer 2 to udp layer.
+int construct_dhcp_packet(unsigned int xid,unsigned int type,unsigned char hwmac[6],unsigned char dstmac[6],unsigned int *hip,unsigned int *dip,unsigned char *packet, unsigned char* fixed_mac,unsigned int*server_ip,unsigned int*req_ip);
 
-//Supported prototol should be defined in this function call.
-void construct_application_packet(unsigned int proto,struct pseudo_udp_hdr* p_udp);
 
-unsigned short checksum(void* addr,int count);
+static unsigned short checksum(void* addr,int count);
 
-void copy_macaddr(unsigned char *sll_addr,unsigned char first,unsigned char second,unsigned char third,unsigned char fourth,unsigned char fifth,unsigned char sixth);
+static void copy_macaddr(unsigned char *sll_addr,unsigned char first,unsigned char second,unsigned char third,unsigned char fourth,unsigned char fifth,unsigned char sixth);
 
-void construct_dhcp(unsigned int xid,unsigned int type,unsigned char hwmac[6],unsigned char dstmac[6],unsigned int *hip,unsigned int *dip,unsigned char *packet, unsigned char* fixed_mac, unsigned int *server_ip);
 
-void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_udp_hdr* p_udp,unsigned char *hwmac,unsigned int*hip,unsigned int *server_ip);
+//construct only dhcp payload
+static int construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_udp_hdr* p_udp,unsigned char *hwmac,unsigned char *dstmac,unsigned int*hip,unsigned int*dip,unsigned int *server_ip,unsigned int *req_ip);
 
-unsigned char*dhcp_add_exten(unsigned char*cursor,unsigned char code,unsigned char length,unsigned char* value);
+//used to add dhcp extension
+static unsigned char*dhcp_add_exten(unsigned char*cursor,unsigned char code,unsigned char length,unsigned char* value);
+
+#endif
