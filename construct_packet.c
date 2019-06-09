@@ -183,7 +183,38 @@ void construct_dhcp_payload(unsigned int xid, unsigned int type,struct pseudo_ud
 		// cursor=dhcp_add_exten(cursor, 55, 10, "\x01\x03\x06\x0f\x1a\x1c\x33\x3a\x3b\x2b");
 		cursor=dhcp_add_exten(cursor,255,0,"\x00");//end
 
+	}else if(type==DHCP_RELEASE){
+		struct dhcp_header* dhcp_hdr=(struct dhcp_header*)p_udp->data;
+		dhcp_hdr->op=1;
+		dhcp_hdr->htype=1;
+		dhcp_hdr->hlen=6;
 
+		dhcp_hdr->hops=0;
+		dhcp_hdr->xid=xid;
+		dhcp_hdr->secs=0;//for lease renewal.
+		dhcp_hdr->flag=DHCP_BROADCAST_FLAT;
+		dhcp_hdr->client_ip=0;
+		memcpy(&(dhcp_hdr -> client_ip),hip, sizeof(int));
+		memset(&(dhcp_hdr -> your_ip), '\0', sizeof(int));
+		// dhcp_hdr->your_ip=0;
+		// dhcp_hdr->server_ip=0;
+		memcpy(&(dhcp_hdr -> server_ip), server_ip, sizeof(int));
+		dhcp_hdr->relay_ip=0;
+		memcpy(dhcp_hdr->hw_addr,hwmac,6);
+		//dhcp_hdr->serv_name;
+		//dhcp_hdr->boot_file;
+		unsigned char*cursor=dhcp_hdr->exten;
+		unsigned char magic_cookie[5]="\x63\x82\x53\x63";
+		memcpy(cursor,magic_cookie,4);
+		cursor+=4;
+
+		cursor=dhcp_add_exten(cursor,53,1,"\x07");//dhcp release
+
+		unsigned char temp[8]="\x01";
+		memcpy(temp+1,hwmac,6);
+		cursor=dhcp_add_exten(cursor,61,7,hwmac);//ethernet ,macaddress
+		cursor=dhcp_add_exten(cursor, 54, 4, (unsigned char*)server_ip);//server ip
+		cursor=dhcp_add_exten(cursor,255,0,"\x00");//end
 
 
 
