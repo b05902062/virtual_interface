@@ -62,15 +62,13 @@ void release_ip(char *s, unsigned xid){
 	return ;
 }
 void print_table(){
-	printf("print_table\n");
 	for(int i = 0; i < user_num; i++){
 		char buf[1000] = {};
 		char ip[32] = {};
 		convertip(users[i].ip, ip);
 		char server_ip[32] = {};
 		convertip(users[i].server_ip, server_ip);
-		sprintf(buf, "user[%d]:\n\tip:%s\n\tserver ip:%s\n", i, ip, server_ip);
-		printf("%d\n", users[i].ip);
+		sprintf(buf, "user[%d]:\tip:%s\tserver ip:%s\n", i, ip, server_ip);
 		send_fd(buf);
 	}
 }
@@ -203,7 +201,7 @@ int main(int argc,char **argv){
 							// fprintf(stdout,"get ip: %s\n", inet_ntoa(*(struct in_addr *)&(dhcp -> your_ip)));
 							isACK = 0;
 						}else{
-							printf("get ACK\n");
+							printf("[INFO] get ACK\n");
 						}
 						break;
 					case 54:
@@ -222,7 +220,7 @@ int main(int argc,char **argv){
 			}
 		}
 		if(FD_ISSET(STDIN_FILENO, &readfds)){
-			write(STDERR_FILENO, "[QUERY]\n", strlen("[QUERY]\n"));
+			// write(STDERR_FILENO, "[QUERY]\n", strlen("[QUERY]\n"));
 			char cmd[1024] = {};
 			int nbytes = read(STDIN_FILENO, cmd, sizeof(cmd));
 			char *pch = strtok(cmd, " ");
@@ -235,18 +233,18 @@ int main(int argc,char **argv){
 				}else if(count == 1){
 					sscanf(pch, "%s", value);
 				}else if(count == 2){
-					write(STDERR_FILENO, "out of range\n", strlen("out of range\n"));
+					write(STDERR_FILENO, "[ERROR] out of range\n", strlen("out of range\n"));
 				}
 				count ++;
 				pch = strtok(NULL, " ");
 			}
-			printf("opt: %s, value: %s\n", opt, value);
+			printf("[QUERY] opt: %s, value: %s\n", opt, value);
 			if(strcmp(opt, "status") == 0){
 				print_table();
 			}else if(strcmp(opt, "release") == 0){
 				release_ip(value, xid);
 			}else{
-				write(STDERR_FILENO, "unknown option\n", strlen("unknown option\n"));
+				write(STDERR_FILENO, "[ERROR] unknown option\n", strlen("unknown option\n"));
 			}
 			// write(STDOUT_FILENO, buf, nbytes);
 			// dhcp_protocol(sd,xid,hwmac, "\x9c\x5c\xf9\x2a\x9f\x00",&aquired_ipaddress, (unsigned int *)"\x08\x08\x08\x08",itface ,fixed_mac, DHCP_DISCOVER);
@@ -265,7 +263,7 @@ int record_user(unsigned int ip, unsigned int server_ip, unsigned char *hw_addr,
 		}
 	}
 	if(user_num < USERMAX){
-		printf("Create new user\n");
+		printf("[INFO] Create new user\n");
 		users[user_num].ip = ip;
 		users[user_num].server_ip = server_ip;
 		memcpy(users[user_num].hwmac, hw_addr, 6);

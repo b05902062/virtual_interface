@@ -205,7 +205,7 @@ static int dhcp_protocol_init(char hwmac[6]){
 			
 		//receive dhcp offer without timeout
 		//send dhcp_request
-		if(send_dhcp_packet(xid, hwmac, (unsigned char*)"\xff\xff\xff\xff\xff\xff", (unsigned int*)"\x00\x00\x00\x00",(unsigned int*)"\xff\xff\xff\xff",&(dlf.ro_ipaddr),&(dlf.aq_ipaddr), DHCP_REQUEST)<0){
+		if(send_dhcp_packet(xid, hwmac, (unsigned char*)"\xff\xff\xff\xff\xff\xff", (unsigned int*)"\x00\x00\x00\x00",(unsigned int*)"\xff\xff\xff\xff",&(dlf.dh_ipaddr),&(dlf.aq_ipaddr), DHCP_REQUEST)<0){
 			continue;
 			//restart dhcp protocol.
 		};
