@@ -7,7 +7,7 @@
 #include <assert.h>
 #define MAX_CHILD 1000
 void showState(int i, int* childrenState){
-	printf("child %d\n", i);
+	printf("[persona] child %d ", i);
 	if(childrenState[i] == 0)
 	{
 		puts("state: start");
@@ -68,6 +68,8 @@ int main(int argc, char **argv)
 	int childrenState[MAX_CHILD];
 	int childrenIP[MAX_CHILD] = {0};
 
+	printf("argv[2]:%s argv[3]:%s\n",argv[2], argv[3]);	
+	puts("start running");
 	for(int i = 0; i < children_nm; i++)
 	{
 		if(pipe(p2c_pfd[i]) == -1 || pipe(c2p_pfd[i]) == -1){
@@ -95,6 +97,7 @@ int main(int argc, char **argv)
 			memset(str2, '\0', sizeof(str2));
 			memcpy(str1, argv[2], strlen(argv[2]));
 			memcpy(str2, argv[3], strlen(argv[3]));
+
 
 			childrenState[i] = 0;
 
@@ -162,7 +165,20 @@ int main(int argc, char **argv)
 				if(token != NULL && strcmp(token, "init") == 0)
 				{
 					token = strtok(NULL, del);
-					if(token != NULL)
+					if(token != NULL && strcmp(token, "all") == 0)
+					{
+						for(int i = 0; i < children_nm; i++)
+						{
+							char sendmsg[100] ={0};
+							sprintf(sendmsg,"DHCP init\n");
+							if(childrenState[i] == 0)
+							{
+								showState(i, childrenState);
+								write(p2c_pfd[target_child][1], sendmsg, strlen(sendmsg));
+							}
+						}
+					}
+					else if(token != NULL)
 					{
 						
 						sscanf(token,"%d", &target_child);
@@ -198,8 +214,8 @@ int main(int argc, char **argv)
 				if(token != NULL)
 				{
 					sscanf(token,"%d", &target_child);
-					if(valid(childrenState[target_child]))
-						write(p2c_pfd[target_child][1], sendmsg, strlen(sendmsg));					
+					showState(target_child, childrenState);
+				
 				}
 			}
 		}
