@@ -276,7 +276,7 @@ static int dhcp_protocol_init(char hwmac[6]){
 }
 
 
-static int send_dhcp_packet(unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *srcip, unsigned int *dstip,unsigned int*server_ip,unsigned int*req_ip, unsigned int type){
+int send_dhcp_packet(unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *srcip, unsigned int *dstip,unsigned int*server_ip,unsigned int*req_ip, unsigned int type){
 
 	//Initializing file descriptor.
 	//get a file descriptor from at layer two.

@@ -43,7 +43,7 @@ int get_lease_info(struct dhcp_lease_info*ret);
 //functions below are for internal use.
 static int dhcp_protocol_init(char hwmac[6]);
 static void send_fd(char *s);
-static int send_dhcp_packet(unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *scrip, unsigned int *dstip,unsigned int*server_ip,unsigned int *req_ip,unsigned int type);
+int send_dhcp_packet(unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *scrip, unsigned int *dstip,unsigned int*server_ip,unsigned int *req_ip,unsigned int type);
 
 
 #endif

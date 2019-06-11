@@ -11,7 +11,8 @@ by wang zih_min
 #include <sys/socket.h>
 #include <linux/if_packet.h>
 #include <sys/ioctl.h>
-#include "construct_packet.h"
+#include "construct_dhcp_packet.h"
+#include "dhcp_protocol.h"
 #include <asm/types.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
@@ -26,31 +27,53 @@ struct netlink_msg{
 	struct ifinfomsg itf;
 	char attrbuf[512];
 };
-struct dhcp_lease_info{
-};
-struct mac_address{
-	unsigned char hwmac[6];
-};
 
 typedef struct user{
 	unsigned int ip;
 	unsigned int server_ip;
 	unsigned char hwmac[6];
+	unsigned char server_mac[6];
 }User;
 
 void send_fd(char *s){
 	write(STDOUT_FILENO, s, strlen(s));
 }
-// struct dhcp_lease_info *dhcp_protocol(int sd,unsigned char*hwmac,unsigned int a_ip, struct ifreq itface,unsigned int type, unsigned int*server_ip);
-struct dhcp_lease_info *dhcp_protocol(int sd,unsigned int xid, unsigned char*hwmac,unsigned char *dstmac, unsigned int *scrip, unsigned int *dstip, struct ifreq itface,unsigned char* fixed_mac, unsigned int type);
-int strncmp_with_null(unsigned char* s1,unsigned char *s2,int number);
-void *initiate_interface(void*arg);
-void process_msg(unsigned char *packet_in, int recv_msg_len, Packet *p);
-int record_user(unsigned int ip, unsigned int server_ip, unsigned char *hw_addr);
+int record_user(unsigned int ip, unsigned int server_ip, unsigned char *hw_addr, unsigned char *server_mac);
 
 User users[USERMAX];
 int user_num = 0;
+void convertip(unsigned int ip, char *s){
+	sprintf(s, "%s", inet_ntoa(*(struct in_addr *)&ip));
+}
+void release_ip(char *s, unsigned xid){
+	int ip_int[4];
+	sscanf(s, "%d.%d.%d.%d", &ip_int[0], &ip_int[1], &ip_int[2], &ip_int[3]);
+	// printf("%d %d %d %d\n", ip_int[0], ip_int[1], ip_int[2], ip_int[3]);
+	unsigned int total = (ip_int[0]) + (ip_int[1] << 8) + (ip_int[2] << 16) + (ip_int[3] << 24);
+	// printf("%s -> %u\n", s, total);
 
+	for(int i = 0; i < user_num; i++){
+		if(users[i].ip == total){
+			send_dhcp_packet(xid, users[i].hwmac, users[i].server_mac, &users[i].ip, &users[i].server_ip, &users[i].server_ip, &users[i].ip, DHCP_RELEASE);
+		return;
+		}
+	}
+	printf("find no user\n");
+	return ;
+}
+void print_table(){
+	printf("print_table\n");
+	for(int i = 0; i < user_num; i++){
+		char buf[1000] = {};
+		char ip[32] = {};
+		convertip(users[i].ip, ip);
+		char server_ip[32] = {};
+		convertip(users[i].server_ip, server_ip);
+		sprintf(buf, "user[%d]:\n\tip:%s\n\tserver ip:%s\n", i, ip, server_ip);
+		printf("%d\n", users[i].ip);
+		send_fd(buf);
+	}
+}
 int main(int argc,char **argv){
 
 	if(argc!=4){
@@ -141,12 +164,12 @@ int main(int argc,char **argv){
 	tv.tv_usec = 0;
 	fd_set readfds;
 
-
-
+	unsigned int server_ip;
 	while(1){
 		FD_ZERO(&readfds);
 		// should need to add STDIN to get parent input
 		FD_SET(recv_sd, &readfds);
+		FD_SET(STDIN_FILENO, &readfds);
 
 		// printf("select\n");
 		if(select(recv_sd+1, &readfds, NULL, NULL, &tv)<0){
@@ -184,12 +207,13 @@ int main(int argc,char **argv){
 						}
 						break;
 					case 54:
-						if(record_user(dhcp -> your_ip, dhcp -> exten[offset], dhcp -> hw_addr) < 0){
+						memcpy(&server_ip, &(dhcp -> exten[offset]), sizeof(unsigned int));
+						if(record_user(dhcp -> your_ip, server_ip, dhcp -> hw_addr, p -> l2.srcMAC) < 0){
 							perror("record_user");
 							exit(0);
 						}
-						// dhcp_server_ip = (struct in_addr *)&(dhcp -> exten[offset]);
-						// fprintf(stdout,"server ip : %s\n", inet_ntoa(*dhcp_server_ip));
+						//struct in_addr *dhcp_server_ip = (struct in_addr *)&(dhcp -> exten[offset]);
+						//fprintf(stdout,"server ip : %s\n", inet_ntoa(*dhcp_server_ip));
 						break;
 					default:
 						break;
@@ -197,28 +221,57 @@ int main(int argc,char **argv){
 				offset += len;
 			}
 		}
+		if(FD_ISSET(STDIN_FILENO, &readfds)){
+			write(STDERR_FILENO, "[QUERY]\n", strlen("[QUERY]\n"));
+			char cmd[1024] = {};
+			int nbytes = read(STDIN_FILENO, cmd, sizeof(cmd));
+			char *pch = strtok(cmd, " ");
+			int count = 0;
+			char opt[64] = {};
+			char value[64] = {};
+			while(pch != NULL){
+				if(count == 0){
+					sscanf(pch, "%s", opt);
+				}else if(count == 1){
+					sscanf(pch, "%s", value);
+				}else if(count == 2){
+					write(STDERR_FILENO, "out of range\n", strlen("out of range\n"));
+				}
+				count ++;
+				pch = strtok(NULL, " ");
+			}
+			printf("opt: %s, value: %s\n", opt, value);
+			if(strcmp(opt, "status") == 0){
+				print_table();
+			}else if(strcmp(opt, "release") == 0){
+				release_ip(value, xid);
+			}else{
+				write(STDERR_FILENO, "unknown option\n", strlen("unknown option\n"));
+			}
+			// write(STDOUT_FILENO, buf, nbytes);
+			// dhcp_protocol(sd,xid,hwmac, "\x9c\x5c\xf9\x2a\x9f\x00",&aquired_ipaddress, (unsigned int *)"\x08\x08\x08\x08",itface ,fixed_mac, DHCP_DISCOVER);
+		}
 	}
 	return 0;
 }
 
-int record_user(unsigned int ip, unsigned int server_ip, unsigned char *hw_addr){
-
-	printf("record %s\n", inet_ntoa(*(struct in_addr*)&ip));
-
+int record_user(unsigned int ip, unsigned int server_ip, unsigned char *hw_addr, unsigned char *server_mac){
 	for(int i = 0; i < user_num; i++){
 		if(users[i].ip == ip){
 			users[i].server_ip = server_ip;
 			memcpy(users[i].hwmac, hw_addr, 6);
+			memcpy(users[i].server_mac, server_mac, 6);
 			return 1;
 		}
 	}
 	if(user_num < USERMAX){
+		printf("Create new user\n");
 		users[user_num].ip = ip;
 		users[user_num].server_ip = server_ip;
-		memcmp(users[user_num].hwmac, hw_addr, 6);
+		memcpy(users[user_num].hwmac, hw_addr, 6);
+		user_num += 1;
 	}else{
 		printf("User is full!");
 	}
 	return 1;
 }
-
